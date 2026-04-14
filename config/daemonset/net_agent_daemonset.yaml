@@ -12,6 +12,8 @@ spec:
       labels:
         app: net-agent
     spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       hostPID: true
       containers:
       - name: agent
