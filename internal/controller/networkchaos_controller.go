@@ -51,13 +51,13 @@ func (r *NetworkChaosReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	sourcePods, err := r.fetchSelectedPods(ctx, netChaos.Spec.SourceSelector, req.Namespace)
 	if err != nil {
-		logger.Error(err, "Erro ao buscar sourcePods")
+		logger.Error(err, "Failed to fetch source pods")
 		return ctrl.Result{}, err
 	}
 
 	targetPods, err := r.fetchSelectedPods(ctx, netChaos.Spec.TargetSelector, req.Namespace)
 	if err != nil {
-		logger.Error(err, "Erro ao buscar targetPods")
+		logger.Error(err, "Failed to fetch target pods")
 		return ctrl.Result{}, err
 	}
 
@@ -69,7 +69,7 @@ func (r *NetworkChaosReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	if len(targetIPs) == 0 {
-		logger.Info("Nenhum IP de destino encontrado ainda. Tentando novamente mais tarde.")
+		logger.Info("No target IPs found yet. Retrying later.")
 		return ctrl.Result{RequeueAfter: 5}, nil
 	}
 
@@ -78,7 +78,7 @@ func (r *NetworkChaosReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			continue
 		}
 
-		containerID := sourcePod.Status.ContainerStatuses[0].ContainerID // Pega o principal
+		containerID := sourcePod.Status.ContainerStatuses[0].ContainerID
 		nodeName := sourcePod.Spec.NodeName
 
 		var agentPods corev1.PodList
@@ -89,7 +89,7 @@ func (r *NetworkChaosReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		)
 
 		if err != nil || len(agentPods.Items) == 0 {
-			logger.Error(err, "Agente net-agent não encontrado no node", "node", nodeName)
+			logger.Error(err, "Net-agent not found on node", "node", nodeName)
 			continue
 		}
 
@@ -98,9 +98,9 @@ func (r *NetworkChaosReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		for _, targetIP := range targetIPs {
 			err := r.sendLatencyRequest(agentIP, containerID, netChaos.Spec.Delay, targetIP)
 			if err != nil {
-				logger.Error(err, "Falha ao aplicar latência", "pod", sourcePod.Name)
+				logger.Error(err, "Failed to apply latency", "pod", sourcePod.Name)
 			} else {
-				logger.Info("Latência aplicada com sucesso", "pod", sourcePod.Name, "target", targetIP)
+				logger.Info("Latency applied successfully", "pod", sourcePod.Name, "target", targetIP)
 			}
 		}
 	}
@@ -181,7 +181,7 @@ func (r *NetworkChaosReconciler) sendLatencyRequest(agentIP, containerID, delay,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("daemonset retornou status %d", resp.StatusCode)
+		return fmt.Errorf("daemonset returned status %d", resp.StatusCode)
 	}
 
 	return nil
@@ -207,9 +207,6 @@ func (r *NetworkChaosReconciler) deleteLatencyOnNodes(ctx context.Context, netCh
 		}
 	}
 
-	// DICA DE ARQUITETURA: Se o usuário deletar os pods de destino ANTES de deletar o NetworkChaos,
-	// não teremos os IPs para limpar a regra específica. Nesse caso, usamos a rota de fallback (clear-latency)
-	// que você já havia inteligentemente criado no DaemonSet.
 	useClearFallback := len(targetIPs) == 0
 
 	for _, sourcePod := range sourcePods {
@@ -228,25 +225,24 @@ func (r *NetworkChaosReconciler) deleteLatencyOnNodes(ctx context.Context, netCh
 		)
 
 		if err != nil || len(agentPods.Items) == 0 {
-			logger.Error(err, "Agente net-agent não encontrado no node durante a limpeza", "node", nodeName)
+			logger.Error(err, "Net-agent not found on node during cleanup", "node", nodeName)
 			continue
 		}
 
 		agentIP := agentPods.Items[0].Status.PodIP
 
 		if useClearFallback {
-			logger.Info("Nenhum IP de destino encontrado. Executando fallback de limpeza total no pod.", "pod", sourcePod.Name)
+			logger.Info("No target IPs found. Performing fallback full cleanup on pod.", "pod", sourcePod.Name)
 			r.sendClearLatencyRequest(agentIP, containerID)
 			continue
 		}
 
-		// Faz a requisição HTTP DELETE para cada targetIP encontrado
 		for _, targetIP := range targetIPs {
 			err := r.sendDeleteLatencyRequest(agentIP, containerID, targetIP)
 			if err != nil {
-				logger.Error(err, "Falha ao remover latência específica", "pod", sourcePod.Name, "targetIP", targetIP)
+				logger.Error(err, "Failed to remove specific latency", "pod", sourcePod.Name, "targetIP", targetIP)
 			} else {
-				logger.Info("Latência removida com sucesso", "pod", sourcePod.Name, "target", targetIP)
+				logger.Info("Latency removed successfully", "pod", sourcePod.Name, "target", targetIP)
 			}
 		}
 	}
@@ -277,7 +273,7 @@ func (r *NetworkChaosReconciler) sendDeleteLatencyRequest(agentIP, containerID, 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("daemonset retornou status %d ao deletar latência", resp.StatusCode)
+		return fmt.Errorf("daemonset returned status %d when deleting latency", resp.StatusCode)
 	}
 
 	return nil
@@ -305,7 +301,7 @@ func (r *NetworkChaosReconciler) sendClearLatencyRequest(agentIP, containerID st
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("daemonset retornou status %d no fallback de clear-latency", resp.StatusCode)
+		return fmt.Errorf("daemonset returned status %d in clear-latency fallback", resp.StatusCode)
 	}
 
 	return nil
