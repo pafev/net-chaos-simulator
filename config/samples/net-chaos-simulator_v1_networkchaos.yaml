@@ -5,5 +5,18 @@ metadata:
     app.kubernetes.io/name: net-chaos-simulator
     app.kubernetes.io/managed-by: kustomize
   name: networkchaos-sample
+  namespace: default
+  finalizers:
+    - "net-chaos-simulator.pafev.dev/finalizer"
 spec:
-  # TODO(user): Add fields here
+  sourceSelector:
+    name: ""
+    namespace: ""
+    labels:
+      matchLabels: {}
+  targetSelector:
+    name: ""
+    namespace: ""
+    labels:
+      matchLabels: {}
+  delay: "200ms"
