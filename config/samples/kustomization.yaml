@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- net-chaos-simulator_v1_networkchaos.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

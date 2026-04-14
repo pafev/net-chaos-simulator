@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: net-agent
+  namespace: net-chaos-system
+spec:
+  selector:
+    matchLabels:
+      app: net-agent
+  template:
+    metadata:
+      labels:
+        app: net-agent
+    spec:
+      hostPID: true
+      containers:
+      - name: agent
+        image: pafev/net-chaos-simulator-daemonset:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        securityContext:
+          privileged: true
+          capabilities:
+            add: ["NET_ADMIN", "SYS_ADMIN"]
+        volumeMounts:
+        - name: containerd-socket
+          mountPath: /run/containerd/containerd.sock 
+      volumes:
+      - name: containerd-socket
+        hostPath:
+          path: /run/containerd/containerd.sock
+          type: Socket

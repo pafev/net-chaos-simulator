@@ -1,0 +1,2 @@
+resources:
+- net_agent_daemonset.yaml
