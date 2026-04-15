@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: net-agent
-  namespace: net-chaos-system
+  namespace: net-chaos-simulator-system
 spec:
   selector:
     matchLabels:

@@ -83,7 +83,7 @@ func (r *NetworkChaosReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		var agentPods corev1.PodList
 		err := r.List(ctx, &agentPods,
-			client.InNamespace("net-chaos-system"),
+			client.InNamespace("net-chaos-simulator-system"),
 			client.MatchingLabels{"app": "net-agent"},
 			client.MatchingFields{"spec.nodeName": nodeName},
 		)
@@ -219,7 +219,7 @@ func (r *NetworkChaosReconciler) deleteLatencyOnNodes(ctx context.Context, netCh
 
 		var agentPods corev1.PodList
 		err := r.List(ctx, &agentPods,
-			client.InNamespace("net-chaos-system"),
+			client.InNamespace("net-chaos-simulator-system"),
 			client.MatchingLabels{"app": "net-agent"},
 			client.MatchingFields{"spec.nodeName": nodeName},
 		)
