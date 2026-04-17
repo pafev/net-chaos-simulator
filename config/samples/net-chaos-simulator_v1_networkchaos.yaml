@@ -14,7 +14,12 @@ spec:
     namespace: ""
     labels:
       matchLabels: {}
-  targetSelector:
+  targetPodSelector:
+    name: ""
+    namespace: ""
+    labels:
+      matchLabels: {}
+  targetServiceSelector:
     name: ""
     namespace: ""
     labels:

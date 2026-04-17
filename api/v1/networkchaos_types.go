@@ -13,10 +13,30 @@ type PodSelector struct {
 	Labels *metav1.LabelSelector `json:"labels,omitempty"`
 }
 
+type ServiceSelector struct {
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+	// +optional
+	Name string `json:"name,omitempty"`
+	// +optional
+	Labels *metav1.LabelSelector `json:"labels,omitempty"`
+}
+
+// NetworkChaosSpec defines the desired state of NetworkChaos
+// +kubebuilder:validation:XValidation:rule="has(self.targetPodSelector) || has(self.targetServiceSelector)",message="either targetPodSelector or targetServiceSelector must be provided"
 type NetworkChaosSpec struct {
+	// +kubebuilder:validation:XValidation:rule="has(self.name) || has(self.labels)",message="sourceSelector must specify either a name or labels"
 	SourceSelector PodSelector `json:"sourceSelector"`
-	TargetSelector PodSelector `json:"targetSelector"`
-	Delay          string      `json:"delay"`
+
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="has(self.name) || has(self.labels)",message="targetPodSelector must specify either a name or labels"
+	TargetPodSelector PodSelector `json:"targetPodSelector,omitempty"`
+
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="has(self.name) || has(self.labels)",message="targetServiceSelector must specify either a name or labels"
+	TargetServiceSelector ServiceSelector `json:"targetServiceSelector,omitempty"`
+
+	Delay string `json:"delay"`
 }
 
 type NetworkChaosStatus struct {

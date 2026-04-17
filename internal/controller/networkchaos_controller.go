@@ -36,6 +36,7 @@ const netChaosFinalizer = "net-chaos-simulator.pafev.dev/finalizer"
 // +kubebuilder:rbac:groups=net-chaos-simulator.pafev.dev,resources=networkchaos/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=net-chaos-simulator.pafev.dev,resources=networkchaos/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch
 
 func (r *NetworkChaosReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := logf.FromContext(ctx)
@@ -55,16 +56,32 @@ func (r *NetworkChaosReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	targetPods, err := r.fetchSelectedPods(ctx, netChaos.Spec.TargetSelector, req.Namespace)
-	if err != nil {
-		logger.Error(err, "Failed to fetch target pods")
-		return ctrl.Result{}, err
+	var targetPods []corev1.Pod
+	if netChaos.Spec.TargetPodSelector.Name != "" || netChaos.Spec.TargetPodSelector.Labels != nil {
+		targetPods, err = r.fetchSelectedPods(ctx, netChaos.Spec.TargetPodSelector, req.Namespace)
+		if err != nil {
+			logger.Error(err, "Failed to fetch target pods")
+			return ctrl.Result{}, err
+		}
+	}
+
+	var targetServices []corev1.Service
+	if netChaos.Spec.TargetServiceSelector.Name != "" || netChaos.Spec.TargetServiceSelector.Labels != nil {
+		targetServices, err = r.fetchSelectedServices(ctx, netChaos.Spec.TargetServiceSelector, req.Namespace)
+		if err != nil {
+			logger.Error(err, "Failed to fetch target services")
+		}
 	}
 
 	var targetIPs []string
 	for _, pod := range targetPods {
 		if pod.Status.PodIP != "" {
 			targetIPs = append(targetIPs, pod.Status.PodIP)
+		}
+	}
+	for _, service := range targetServices {
+		if service.Spec.ClusterIP != "" {
+			targetIPs = append(targetIPs, service.Spec.ClusterIP)
 		}
 	}
 
@@ -157,6 +174,41 @@ func (r *NetworkChaosReconciler) fetchSelectedPods(ctx context.Context, selector
 	return pods, nil
 }
 
+func (r *NetworkChaosReconciler) fetchSelectedServices(ctx context.Context, selector netchaossimulatorv1.ServiceSelector, crdNamespace string) ([]corev1.Service, error) {
+	targetNamespace := crdNamespace
+	if selector.Namespace != "" {
+		targetNamespace = selector.Namespace
+	}
+
+	var services []corev1.Service
+
+	if selector.Name != "" {
+		var service corev1.Service
+		err := r.Get(ctx, client.ObjectKey{Name: selector.Name, Namespace: targetNamespace}, &service)
+		if err != nil {
+			return nil, client.IgnoreNotFound(err)
+		}
+		services = append(services, service)
+		return services, nil
+	}
+
+	if selector.Labels != nil {
+		labelSelector, err := metav1.LabelSelectorAsSelector(selector.Labels)
+		if err != nil {
+			return nil, err
+		}
+
+		var serviceList corev1.ServiceList
+		err = r.List(ctx, &serviceList, client.InNamespace(targetNamespace), client.MatchingLabelsSelector{Selector: labelSelector})
+		if err != nil {
+			return nil, err
+		}
+		return serviceList.Items, nil
+	}
+
+	return services, nil
+}
+
 func (r *NetworkChaosReconciler) sendLatencyRequest(agentIP, containerID, delay, targetIP string) error {
 	url := fmt.Sprintf("http://%s:8080/api/apply-latency", agentIP)
 
@@ -195,15 +247,32 @@ func (r *NetworkChaosReconciler) deleteLatencyOnNodes(ctx context.Context, netCh
 		return err
 	}
 
-	targetPods, err := r.fetchSelectedPods(ctx, netChaos.Spec.TargetSelector, netChaos.Namespace)
-	if err != nil {
-		return err
+	var targetPods []corev1.Pod
+	if netChaos.Spec.TargetPodSelector.Name != "" || netChaos.Spec.TargetPodSelector.Labels != nil {
+		targetPods, err = r.fetchSelectedPods(ctx, netChaos.Spec.TargetPodSelector, netChaos.Namespace)
+		if err != nil {
+			logger.Error(err, "Failed to fetch target pods during cleanup")
+			return err
+		}
+	}
+
+	var targetServices []corev1.Service
+	if netChaos.Spec.TargetServiceSelector.Name != "" || netChaos.Spec.TargetServiceSelector.Labels != nil {
+		targetServices, err = r.fetchSelectedServices(ctx, netChaos.Spec.TargetServiceSelector, netChaos.Namespace)
+		if err != nil {
+			logger.Error(err, "Failed to fetch target services during cleanup")
+		}
 	}
 
 	var targetIPs []string
 	for _, pod := range targetPods {
 		if pod.Status.PodIP != "" {
 			targetIPs = append(targetIPs, pod.Status.PodIP)
+		}
+	}
+	for _, service := range targetServices {
+		if service.Spec.ClusterIP != "" {
+			targetIPs = append(targetIPs, service.Spec.ClusterIP)
 		}
 	}
 
